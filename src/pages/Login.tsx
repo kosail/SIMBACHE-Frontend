@@ -1,7 +1,7 @@
 import {Alert, Box, Button, Container, InputAdornment, Paper, Stack, TextField, Typography} from "@mui/material";
 import {LockRounded, Person3Rounded} from '@mui/icons-material';
 import bgImage from '../assets/mikahil_nilov_pexels.webp';
-import logo from '../favicon.webp'
+import logo from '../assets/favicon.webp'
 import {type FormEvent, useState} from "react";
 import useAuth from "../hooks/useAuth.ts";
 import type {LoginPayload} from "../types/Login.ts";
@@ -84,9 +84,11 @@ export default function Login() {
                     alignItems={'center'}
                     useFlexGap
                 >
-                    <Stack direction={'row'} spacing={2} alignItems={'center'}>
+                    <Stack direction={'row'} spacing={1} alignItems={'center'}>
                         <Box component={'img'} src={logo} width={150} />
-                        <Typography variant={'h3'} align={'center'}>Sistema de Baches</Typography>
+                        <Typography variant={'h2'} align={'center'} color={'primary'}>
+                            SIMBACHE
+                        </Typography>
                     </Stack>
 
 

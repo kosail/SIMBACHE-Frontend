@@ -1,21 +1,14 @@
-![SIMBACHE Logo](repo_images/banner.webp)
+![SIMBACHE Logo](src/assets/banner.webp)
 
 ### **Sistema Mexicano de Bacheo y Conservación de Calles.**
 
 A digital platform that empowers citizens and local governments to report, track, and manage pothole repairs efficiently across Mexico.
 
-> This project is not related to the Mexican gov. It is a college homework.
+Kindly notice that although I wanted to make this a real product, I didn't have the time to do it and the deadline to present it was very tight. The code is horribly written and I'm not proud of it. Although, I hope it can be useful for someone.
 
 ---
 
-## Overview
-
-**SIMBACHE** is a web application designed to modernize the public infrastructure maintenance process.  
-It provides an intuitive interface for reporting street damages, assigning repair tasks, and visualizing progress in real time — bridging the gap between citizens and municipal services.
-
-This initiative promotes **transparency**, **efficiency**, and **collaboration** within public works departments.
-
-#### Kindly notice that although I wanted to make this a real product, I didn't have the time to do it and the deadline to present it was very tight. The code is horribly written and I'm not proud of it. Although, I hope it can be useful for someone.
+> This project is not related to the Mexican gov. It is a college homework.
 
 ---
 
@@ -35,6 +28,7 @@ This initiative promotes **transparency**, **efficiency**, and **collaboration**
 
 ### Fonts:
 - [Noto Sans, available in Google Fonts.](https://fonts.google.com/noto/specimen/Noto+Sans)
+- [Plus Jakarta Sans, available in Google Fonts](https://fonts.google.com/specimen/Plus+Jakarta+Sans)
 
 ### Images:
 - [Mexico wallpaper used in the login screen](https://www.pexels.com/photo/aerial-view-of-city-6943384/)
