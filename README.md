@@ -14,12 +14,12 @@ Kindly notice that although I wanted to make this a real product, I didn't have 
 
 ## Tech Stack
 
-| Layer | Technology                                                 |
-|:------|:-----------------------------------------------------------|
-| Frontend | React TS + Material UI                                     |
-| Backend | Spring Boot 3 (Java 21)                                    |
-| Database | MS SQL Server 2022                                         |
-| Hosting | To be determined (probably something cloud based, like AWS |
+| Layer | Technology                                                                        |
+|:------|:----------------------------------------------------------------------------------|
+| Frontend | Tauri + React TS + Material UI                                                    |
+| Backend | Spring Boot 3 (Java 21)                                                           |
+| Database | MS SQL Server 2022                                                                |
+| Hosting | No hosting after I decided to not ship an entire product, but just do my homework |
 
 
 ---
@@ -27,8 +27,8 @@ Kindly notice that although I wanted to make this a real product, I didn't have 
 ## Resources
 
 ### Fonts:
-- [Noto Sans, available in Google Fonts.](https://fonts.google.com/noto/specimen/Noto+Sans)
-- [Plus Jakarta Sans, available in Google Fonts](https://fonts.google.com/specimen/Plus+Jakarta+Sans)
+- Main Font: [Plus Jakarta Sans, available in Google Fonts](https://fonts.google.com/specimen/Plus+Jakarta+Sans)
+- Fallback Font: [Noto Sans, available in Google Fonts.](https://fonts.google.com/noto/specimen/Noto+Sans)
 
 ### Images:
 - [Mexico wallpaper used in the login screen](https://www.pexels.com/photo/aerial-view-of-city-6943384/)
@@ -50,7 +50,7 @@ See the [LICENSE](./LICENSE.txt) file for details.
 
 ---
 
-**This project is not related in any way to the Mexican government.** It is just a college homework, but I wanted to brand it like a real world product.
+**This project is not related in any way to the Mexican government.** It is just a college homework, but I wanted to brand it like a real-world product.
 
 SIMBACHE Copyright © 2025, kosail
 With love, from Honduras.
