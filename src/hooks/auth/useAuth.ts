@@ -1,5 +1,5 @@
 import {useContext} from "react";
-import {AuthContext} from "../auth/AuthProvider.tsx";
+import {AuthContext} from "../../auth/AuthProvider.tsx";
 
 export default function useAuth() {
     const loginContext = useContext(AuthContext);

@@ -1,18 +1,23 @@
-import {Alert, Box, Button, Container, InputAdornment, Paper, Stack, TextField, Typography} from "@mui/material";
+import {Box, Button, Container, InputAdornment, Paper, Stack, TextField, Typography} from "@mui/material";
 import {LockRounded, Person3Rounded} from '@mui/icons-material';
 import bgImage from '../assets/mikahil_nilov_pexels.webp';
 import logo from '../assets/favicon.webp'
 import {type FormEvent, useState} from "react";
-import useAuth from "../hooks/useAuth.ts";
+import useAuth from "../hooks/auth/useAuth.ts";
 import type {LoginPayload} from "../types/Login.ts";
 import {sha256} from "js-sha256";
 import {useLocation, useNavigate} from "react-router-dom";
 import useTheme from "../hooks/useTheme.tsx";
+import {FeedbackUI} from "../components/feedback/FeedbackUI.tsx";
+import {useFeedbackStore} from "../hooks/feedback/feedbackStore.ts";
+import {AxiosError} from "axios";
 
 export default function Login() {
     const auth = useAuth();
+    const feedback = useFeedbackStore();
+
     const {isDarkMode} = useTheme();
-    const glassColor: string = isDarkMode ? '#00000080' : '#ffffff80';
+    const glassColor: string = isDarkMode ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)';
 
     const navigate = useNavigate();
     const location = useLocation();
@@ -20,11 +25,9 @@ export default function Login() {
 
     const [user, setUser] = useState<string>('');
     const [password, setPassword] = useState<string>('');
-    const [error, setError] = useState<string | null>(null);
 
     async function handleSubmit(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
-        setError(null);
 
         try {
             const hashedPassword = sha256(password);
@@ -36,8 +39,12 @@ export default function Login() {
             await auth.login(payload)
             navigate(from, { replace: true });
 
-        } catch(error: Error | any) {
-            setError(error?.message ?? 'Inicio de sesión fallido. Contacta al administrador para más detalles.')
+        } catch(error: unknown) {
+            feedback.errorMsg(
+                error instanceof AxiosError ?
+                "Error: " + error.response?.data.message :
+                    'Inicio de sesión fallido. Contacta al administrador para más detalles.'
+            );
         }
     }
 
@@ -145,13 +152,15 @@ export default function Login() {
                         variant={'caption'}
                         textAlign={'center'}
                     >
-                        Todos los derechos reservados, 2025.
+                        Todos los derechos reservados, {new Date().getFullYear()}.<br/>
                         Con amor, desde Saltillo.
                     </Typography>
                 </Stack>
-
-                {error && <Alert severity={'error'} sx={{ mb: 2 }}>{error}</Alert> }
             </Paper>
+
+            <Box sx={{ position: 'absolute', bottom: 10, right: 10 }}>
+                <FeedbackUI />
+            </Box>
         </Container>
     );
 }
