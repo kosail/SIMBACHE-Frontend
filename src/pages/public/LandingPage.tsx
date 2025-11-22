@@ -1,4 +1,4 @@
-import {Box} from "@mui/material";
+import {Box, Fade} from "@mui/material";
 import Navbar from "../../components/Navbar.tsx";
 import {useState} from "react";
 import {AllLandingPages, type LandingPage} from './landingPages/AllLandingPages.ts'
@@ -14,7 +14,11 @@ export default function LandingPage() {
                     onPageChange={(page: LandingPage) => setPage(page)}
                 />
 
-                <Content />
+                <Fade key={page.Element.name} in={true} timeout={250}>
+                    <Box sx={{ height: 100 }}>
+                        <Content />
+                    </Box>
+                </Fade>
             </Box>
     );
 }
