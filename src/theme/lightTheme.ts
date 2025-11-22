@@ -1,50 +1,56 @@
-import {PaletteOptions} from '@mui/material';
+import { PaletteOptions } from "@mui/material";
 
 export const lightTheme: PaletteOptions = {
-    mode: 'light',
+    mode: "light",
+
     primary: {
-        main: '#606C38',
-        light: '#606C3844',
-        contrastText: '#FEFAE0',
+        main: "#93B259",        // Green
+        light: "#93B25933",
+        contrastText: "#F3EFDF",
     },
+
     secondary: {
-        main: '#DDA15E',
-        light: '#DDA15E44',
-        contrastText: '#283618',
+        main: "#D3A05A",        // Yellow
+        light: "#D3A05A33",
+        contrastText: "#F3EFDF",
     },
+
     tertiary: {
-        main: '#BC6C25',
-        light: '#BC6C2544',
-        contrastText: '#FEFAE0',
+        main: "#E69875",        // Orange
+        light: "#E6987533",
+        contrastText: "#F3EFDF",
     },
 
     error: {
-        main: '#D32F2F',
-        contrastText: '#FEFAE0',
+        main: "#F85552",        // Red
+        contrastText: "#F3EFDF",
     },
+
     warning: {
-        main: '#ED6C02',
-        contrastText: '#FEFAE0',
+        main: "#D3A05A",        // Soft yellow
+        contrastText: "#F3EFDF",
     },
+
     info: {
-        main: '#0288D1',
-        contrastText: '#FEFAE0',
+        main: "#56949F",        // Aqua
+        contrastText: "#F3EFDF",
     },
+
     success: {
-        main: '#2E7D32',
-        contrastText: '#FEFAE0',
+        main: "#93B259",        // Green
+        contrastText: "#F3EFDF",
     },
 
     background: {
-        default: '#FEFAE0',
-        paper: '#F5F1D6',
+        default: "#F3EFDF",     // Main Everforest light background
+        paper:   "#EDEAD5",     // Slightly darker layer
     },
 
     text: {
-        primary: '#283618',
-        secondary: '#606C38',
-        disabled: 'rgba(40, 54, 24, 0.5)',
+        primary:   "#5C6A72",   // Main foreground gray
+        secondary: "#93B259",   // Accent green
+        disabled:  "rgba(92, 106, 114, 0.5)",
     },
 
-    divider: 'rgba(40, 54, 24, 0.12)',
+    divider: "rgba(92, 106, 114, 0.12)",
 };

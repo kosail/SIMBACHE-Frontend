@@ -3,7 +3,7 @@ import { Box, Typography } from "@mui/material";
 export default function Home() {
     return (
         <Box sx={{ p: 4 }}>
-            <Typography variant="h4" gutterBottom>Home heere</Typography>
+            <Typography variant="h4" gutterBottom>Settings page</Typography>
         </Box>
     );
 }

@@ -1,50 +1,56 @@
-import {PaletteOptions} from "@mui/material";
+import { PaletteOptions } from "@mui/material";
 
 export const darkTheme: PaletteOptions = {
-    mode: 'dark',
+    mode: "dark",
+
     primary: {
-        main: '#606C38',
-        light: '#606C3844',
-        contrastText: '#FEFAE0',
+        main: "#A7C080",        // Green
+        light: "#A7C08033",
+        contrastText: "#2D353B",
     },
+
     secondary: {
-        main: '#DDA15E',
-        light: '#DDA15E44',
-        contrastText: '#FEFAE0',
+        main: "#D9BB80",        // Yellow
+        light: "#D9BB8033",
+        contrastText: "#2D353B",
     },
+
     tertiary: {
-        main: '#BC6C25',
-        light: '#BC6C2544',
-        contrastText: '#FEFAE0',
+        main: "#E69875",        // Orange
+        light: "#E6987533",
+        contrastText: "#2D353B",
     },
 
     error: {
-        main: '#CF6679',
-        contrastText: '#FEFAE0',
+        main: "#E67E80",        // Red
+        contrastText: "#2D353B",
     },
+
     warning: {
-        main: '#FFB74D',
-        contrastText: '#283618',
+        main: "#DBBC7F",        // Yellow-ish warning variant
+        contrastText: "#2D353B",
     },
+
     info: {
-        main: '#64B5F6',
-        contrastText: '#283618',
+        main: "#7FBBB3",        // Aqua
+        contrastText: "#2D353B",
     },
+
     success: {
-        main: '#81C784',
-        contrastText: '#283618',
+        main: "#A7C080",        // Green (same as primary)
+        contrastText: "#2D353B",
     },
 
     background: {
-        default: '#243116',
-        paper: '#303D1E',
+        default: "#2D353B",     // Main background
+        paper: "#343F44",       // Raised surfaces
     },
 
     text: {
-        primary: '#FEFAE0',
-        secondary: '#DDA15E',
-        disabled: 'rgba(254, 250, 224, 0.5)',
+        primary:   "#D3C6AA",   // Foreground
+        secondary: "#A7C080",   // Accent
+        disabled:  "rgba(211, 198, 170, 0.5)",
     },
 
-    divider: 'rgba(254, 250, 224, 0.12)',
+    divider: "rgba(211, 198, 170, 0.12)",
 };
