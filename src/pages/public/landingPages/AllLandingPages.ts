@@ -1,5 +1,4 @@
 import type {JSX} from "react";
-import Contractors from "./Contractors.tsx";
 import Contact from "./Contact.tsx";
 import Main from "./Main.tsx";
 
@@ -13,10 +12,10 @@ export const AllLandingPages: LandingPage[] = [
         name: "Inicio",
         Element: Main
     },
-    {
-        name: "Contratistas",
-        Element: Contractors
-    },
+    // {
+    //     name: "Contratistas",
+    //     Element: Contractors
+    // },
     {
         name: "Contáctanos",
         Element: Contact

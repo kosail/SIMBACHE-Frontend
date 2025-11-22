@@ -1,8 +1,7 @@
 import {AppBar, Box, Button, Stack, Toolbar, Typography} from "@mui/material";
-import logo from '../../assets/favicon.webp'
-import useTheme from "../../hooks/useTheme.tsx";
-import {useNavigate} from "react-router-dom";
-import {AllLandingPages, type LandingPage} from "../../pages/public/landingPages/AllLandingPages.ts";
+import logo from '../assets/favicon.webp'
+import useTheme from "../hooks/useTheme.tsx";
+import {AllLandingPages, type LandingPage} from "../pages/public/landingPages/AllLandingPages.ts";
 
 interface NavbarProps {
     activePage: LandingPage;
@@ -10,19 +9,19 @@ interface NavbarProps {
 }
 
 export default function Navbar({onPageChange}: NavbarProps) {
-    // Para poder navegar a la página de login
-    const navigate = useNavigate();
-
     const {isDarkMode} = useTheme();
 
     const barColor: string = isDarkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(255, 255, 255, 0.5)'
 
     return (
         <Box sx={{ display: 'flex' }}>
-            <AppBar component={'nav'} sx={{
-                backgroundColor: barColor,
-                backdropFilter: 'blur(10px)'
-            }}>
+            <AppBar
+                component={'nav'}
+                sx={{
+                    backgroundColor: barColor,
+                    backdropFilter: 'blur(10px)'
+                }}
+            >
                 <Toolbar>
                     <Box component={'img'} src={logo} width={70} alt={'logo'} />
 
@@ -36,7 +35,14 @@ export default function Navbar({onPageChange}: NavbarProps) {
                         SIMBACHE
                     </Typography>
 
-                    <Stack direction={'row'} spacing={2} flexGrow={1} alignItems={'center'} justifyContent={'center'} >
+                    <Stack
+                        direction={'row'}
+                        spacing={2}
+                        flexGrow={1}
+                        alignItems={'center'}
+                        justifyContent={'center'}
+                        sx={{ mr: 15 }}
+                    >
                         { AllLandingPages.map((item, index) => (
                             <Button
                                 key={index}
@@ -48,15 +54,6 @@ export default function Navbar({onPageChange}: NavbarProps) {
                             </Button>
                         ))}
                     </Stack>
-
-                    <Button
-                        variant={'contained'}
-                        color={'primary'}
-                        onClick={() => navigate('/login')}
-                        disableElevation
-                    >
-                        <Typography variant={'body1'} color={'white'} letterSpacing={1} sx={{p: 0.5, mt:0.5}}>Acceder</Typography>
-                    </Button>
 
                 </Toolbar>
             </AppBar>

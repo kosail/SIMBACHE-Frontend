@@ -1,5 +1,5 @@
 import {Box} from "@mui/material";
-import Navbar from "../../components/public/Navbar.tsx";
+import Navbar from "../../components/Navbar.tsx";
 import {useState} from "react";
 import {AllLandingPages, type LandingPage} from './landingPages/AllLandingPages.ts'
 

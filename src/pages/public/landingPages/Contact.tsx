@@ -17,7 +17,7 @@ import {
     TextField,
     Typography
 } from "@mui/material";
-import {Footer} from "../../../components/public/Footer.tsx";
+import {Footer} from "../../../components/Footer.tsx";
 import type {FormEvent} from "react";
 
 type ContactFormTextFieldType = {

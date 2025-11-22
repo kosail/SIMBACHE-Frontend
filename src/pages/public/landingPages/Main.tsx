@@ -10,9 +10,9 @@ import {
     type SvgIconComponent,
     VerifiedUserRounded
 } from "@mui/icons-material";
-import {Footer} from "../../../components/public/Footer.tsx";
+import {Footer} from "../../../components/Footer.tsx";
 import {useState} from "react";
-import CitizenReport from "../../../components/public/CitizenReport.tsx";
+import CitizenReport from "../../../components/CitizenReport.tsx";
 
 type CardContentType = {
     Icon: SvgIconComponent;
