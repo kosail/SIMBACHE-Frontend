@@ -2,7 +2,7 @@ import {useQuery} from "@tanstack/react-query";
 import {PotholeResponseDto} from "../../types/PotholeResponseDto.ts";
 import {api} from "../../utils/api.ts";
 
-function useAllPotholes() {
+function usePotholes() {
     return useQuery<PotholeResponseDto[]>({
         queryKey: ['potholes'],
         queryFn: async () => {
@@ -12,4 +12,14 @@ function useAllPotholes() {
     });
 }
 
-export {useAllPotholes};
+function useSinglePothole(id: number) {
+    return useQuery<PotholeResponseDto[]>({
+        queryKey: ['pothole', id],
+        queryFn: async () => {
+            const { data } = await api.get<PotholeResponseDto>(`/api/potholes/${id}`);
+            return data;
+        }
+    });
+}
+
+export {usePotholes, useSinglePothole};

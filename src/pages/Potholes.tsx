@@ -1,13 +1,31 @@
-import {Box, FormControl, InputLabel, Select, Stack, Typography} from "@mui/material";
-import {useAllPotholes} from "../hooks/potholes/useAllPotholes.ts";
+import {Box, Button, Stack, Typography} from "@mui/material";
+import {usePotholes} from "../hooks/potholes/usePotholes.ts";
 import {DataGrid} from "@mui/x-data-grid";
+import {useNavigate} from "react-router-dom";
+import {useState} from "react";
+import NewPotholeDialog from "../components/potholes/NewPotholeDialog.tsx";
+import {PotholeResponseDto} from "../types/PotholeResponseDto.ts";
 
 export default function Home() {
-    const potholesData = useAllPotholes();
+    const navigate = useNavigate();
+    const potholesData = usePotholes();
+
+    const [createDialog, setCreateDialog] = useState(false);
 
     return (
         <Box sx={{ p: 4 }}>
-            <Typography variant="h4" gutterBottom>Reporte de baches activos</Typography>
+            <Stack direction={'row'} spacing={2} alignItems={'center'} justifyContent={'space-between'} sx={{ pb: 4 }}>
+                <Typography
+                    variant="h4"
+                    gutterBottom
+                >
+                    Reporte de baches activos
+                </Typography>
+
+                <Button variant={'contained'} onClick={() => setCreateDialog(true)}>
+                    <Typography variant={'body1'}>Reportar nuevo bache</Typography>
+                </Button>
+            </Stack>
 
             {/*<Typography variant={'h6'} sx={{ mb: 2 }}>Filtrar por:</Typography>*/}
             {/*<Stack direction={'row'} spacing={2} alignItems={'center'} justifyContent={'space-between'}>*/}
@@ -48,28 +66,56 @@ export default function Home() {
                         width: 50,
                     },
                     {
-                        field: 'locationId',
-                        headerName: 'Ubicacion ID',
-                        flex: 1,
+                        field: 'postalCode',
+                        headerName: 'Código postal',
+                        width: 130,
+                        valueGetter: (_, row) => row?.location.postalCode
                     },
                     {
-                        field: 'categoryId',
-                        headerName: 'Categoria ID',
+                        field: 'state',
+                        headerName: 'Estado',
                         flex: 1,
+                        valueGetter: (_, row) => row?.location.stateName
                     },
                     {
-                        field: 'statusId',
-                        headerName: 'Estatus ID',
+                        field: 'municipality',
+                        headerName: 'Municipalidad',
                         flex: 1,
+                        valueGetter: (_, row) => row?.location.municipalityName
+                    },
+                    {
+                        field: 'locality',
+                        headerName: 'Localidad',
+                        flex: 1,
+                        valueGetter: (_, row) => row?.location.localityName
                     },
                     {
                         field: 'dateReported',
                         headerName: 'Reportado en',
-                        flex: 1,
+                        width: 200,
                         type: 'dateTime',
                         valueFormatter: (value) => new Date(value).toLocaleString(),
-                    }
+                    },
+                    {
+                        field: 'dateValidated',
+                        headerName: 'Validado en',
+                        width: 200,
+                        type: 'dateTime',
+                        valueFormatter: (value) => value === null ? "SIN VALIDAR" : new Date(value).toLocaleString()
+                    },
+                    {
+                        field: 'status',
+                        headerName: 'Estatus',
+                        width: 170
+                    },
                 ]}
+                onRowClick={(params) => navigate(`/secure/potholes/${params.row.potholeId}`)}
+            />
+
+            <NewPotholeDialog
+                open={createDialog}
+                onClose={() => setCreateDialog(false)}
+                newReportId={ potholesData?.data?.at(-1)?.potholeId + 1 ?? 0 }
             />
 
         </Box>
