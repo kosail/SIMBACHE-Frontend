@@ -46,19 +46,19 @@ export default function Home() {
                         field: 'state',
                         headerName: 'Estado',
                         flex: 1,
-                        valueGetter: (_, row) => row?.location.stateName
+                        valueGetter: (_, row) => row?.location.state.stateName
                     },
                     {
                         field: 'municipality',
                         headerName: 'Municipalidad',
                         flex: 1,
-                        valueGetter: (_, row) => row?.location.municipalityName
+                        valueGetter: (_, row) => row?.location.municipality.municipalityName
                     },
                     {
                         field: 'locality',
                         headerName: 'Localidad',
                         flex: 1,
-                        valueGetter: (_, row) => row?.location.localityName
+                        valueGetter: (_, row) => row?.location.locality.localityName
                     },
                     {
                         field: 'size',

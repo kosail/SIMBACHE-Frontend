@@ -1,6 +1,6 @@
 export interface PotholeCreateDto {
     /** Optional: citizen id that reported it; null when reported by an employee */
-    reportByCitizenId?: number | null;
+    reporterCitizenId?: number | null;
 
     locationId: number;
     categoryId: number;

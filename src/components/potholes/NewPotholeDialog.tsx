@@ -38,6 +38,8 @@ import {PotholeStatus} from "../../types/pothole/PotholeStatus.ts";
 import {usePotholeCategories} from "../../hooks/potholes/usePotholeCategories.ts";
 import {PotholeCategory} from "../../types/pothole/PotholeCategory.ts";
 import {FileUploadResponse} from "../../types/FileUploadResponse.ts";
+import { useCitizenLookup } from '../../hooks/citizens/useCitizenLookup';
+import { CitizenCreateDto } from '../../types/citizen/CitizenCreateDto';
 
 type PostalCodeSource = 'manual' | 'location';
 
@@ -53,9 +55,21 @@ export default function NewPotholeDialog({open, onClose, newReportId, sx}: NewPo
     const feedback = useFeedbackStore();
     const today: string = new Date().toLocaleString();
 
-    const [reportedByCitizen, setReportedByCitizen] = useState(false);
+    // Citizen section
+    const [reporterCitizen, setReporterCitizen] = useState<boolean>(false);
+    const [citizenName, setCitizenName] = useState<string | null>('');
+    const [citizenSecondName, setCitizenSecondName] = useState<string | null>('');
+    const [citizenLastName , setCitizenLastName] = useState<string | null>('');
+    const [citizenSecondLastName , setCitizenSecondLastName] = useState<string | null>('');
+    const [citizenPhone, setCitizenPhone] = useState<bigint | null>('');
+    const [citizenEmail, setCitizenEmail] = useState<string | null>('');
+
+    const [existingCitizenId, setExistingCitizenId] = useState<number | null>(null);
+    const [citizenLookupPhone, setCitizenLookupPhone] = useState<number | undefined>(undefined);
+    const [isAutoFilled, setIsAutoFilled] = useState<boolean>(false);
+
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [confirmation, setConfirmation] = useState(false);
+    const [confirmation, setConfirmation] = useState<boolean>(false);
 
     const [selectedState, setSelectedState] = useState<number | null>(null);
     const [selectedMunicipality, setSelectedMunicipality] = useState<number | null>(null);
@@ -73,6 +87,11 @@ export default function NewPotholeDialog({open, onClose, newReportId, sx}: NewPo
     const localities = useLocalities(selectedMunicipality ?? 0);
     const streetsPerLocality = useStreetsPerLocality(selectedLocality ?? 0);
     const potholeCategories = usePotholeCategories();
+
+    const citizenLookup = useCitizenLookup({
+        phoneNumber: citizenLookupPhone,
+        enabled: reporterCitizen && citizenLookupPhone !== undefined && citizenLookupPhone > 999999, // At least 7 digits
+    });
 
     const readyToSend: boolean =
         Boolean(selectedState && selectedMunicipality && selectedLocality && selectedStreet && selectedCategory) && confirmation;
@@ -153,25 +172,71 @@ export default function NewPotholeDialog({open, onClose, newReportId, sx}: NewPo
         setPostalCodeSource('location');
     }, [locationsFromZip, postalCodeSource]);
 
+    useEffect(() => {
+        if (citizenLookup.data && !citizenLookup.isLoading) {
+            // Citizen found - auto-fill fields
+            const citizen = citizenLookup.data;
+
+            setExistingCitizenId(citizen.citizenId);
+            setCitizenName(citizen.firstName);
+            setCitizenSecondName(citizen.middleName);
+            setCitizenLastName(citizen.lastName);
+            setCitizenSecondLastName(citizen.secondLastName);
+            setCitizenEmail(citizen.email);
+            setIsAutoFilled(true);
+        } else if (citizenLookup.data === null && !citizenLookup.isLoading && citizenLookupPhone) {
+            // Citizen not found - clear existing citizen id but keep typed data
+            setExistingCitizenId(null);
+            setIsAutoFilled(false);
+        }
+    }, [citizenLookup.data, citizenLookup.isLoading, citizenLookupPhone]);
+
+    const handlePhoneChange = (value: string) => {
+        const digitsOnly = value.replace(/\D/g, '');
+        const phoneValue = digitsOnly === '' ? null : BigInt(digitsOnly);
+        setCitizenPhone(phoneValue);
+
+        // Reset auto-fill state when phone changes
+        if (isAutoFilled) {
+            setIsAutoFilled(false);
+            setExistingCitizenId(null);
+        }
+
+        // Trigger lookup if phone has enough digits (at least 10 for Mexican phones)
+        if (digitsOnly.length >= 10) {
+            setCitizenLookupPhone(Number(digitsOnly));
+        } else {
+            setCitizenLookupPhone(undefined);
+        }
+    };
+
+
     const handleClose = () => {
+        setCitizenName(null);
+        setCitizenSecondLastName(null);
+        setCitizenPhone(null);
+        setCitizenEmail(null);
+
+        setExistingCitizenId(null);
+        setCitizenLookupPhone(undefined);
+        setIsAutoFilled(false);
+        setReporterCitizen(false);
+
         setSelectedState(1);
         setSelectedMunicipality(null);
         setSelectedLocality(null);
         resetStreetFields();
+
         setPostalCode('');
         setPostalCodeSource('manual');
+
         setSelectedCategory(null);
         setSelectedFile(null);
+
         onClose();
     };
 
     const handleSubmit = async () => {
-        /* Oh boi... due to the bad design on the backend (my own sin how chases me)
-         * I have to first create a location, wait for the primary key. Then upload the
-         * pothole photo in case there is one attached, and finally create the pothole.
-         * Note for myself: I need to check on better practices and learn more about this.
-         * I wanna play minecraft tho... let's finish this up real quick!
-         */
         const locationDto: Location = {
             stateId: selectedState!,
             municipalityId: selectedMunicipality!,
@@ -183,43 +248,65 @@ export default function NewPotholeDialog({open, onClose, newReportId, sx}: NewPo
 
         let locationId: number = 0;
         let photoUrl: string | null = null;
+        let citizenId: number | null = null;
 
         try {
-            // Load the location ID
-            const response = await api.post<number>('/api/geography/locations/add', locationDto);
-            locationId = response.data;
+            // Step 1: Create the location
+            const locationResponse = await api.post<number>('/api/geography/locations/add', locationDto);
+            locationId = locationResponse.data;
 
-            // If there is a file, then load the photo URL.
+            // Step 2: Handle citizen (if this is a citizen report)
+            if (reporterCitizen) {
+                if (existingCitizenId) {
+                    // Citizen already exists - use their ID
+                    citizenId = existingCitizenId;
+                } else {
+                    // Citizen does not exist - create new one
+                    const citizenDto: CitizenCreateDto = {
+                        firstName: citizenName!,
+                        middleName: citizenSecondName,
+                        lastName: citizenLastName!,
+                        secondLastName: citizenSecondLastName,
+                        email: citizenEmail!,
+                        phoneNumber: citizenPhone ? Number(citizenPhone) : null,
+                        registeredLocationId: locationId
+                    };
+
+                    const citizenResponse = await api.post<number>('/api/citizens/add', citizenDto);
+                    citizenId = citizenResponse.data;
+                }
+            }
+
+            // Step 3: Upload photo if exists
             if (selectedFile) {
                 const formData = new FormData();
                 formData.append('file', selectedFile);
 
-                const response = await api.post<FileUploadResponse>('api/files/upload/pothole-image', formData);
-                photoUrl = response.data.url;
-                console.log(photoUrl);
+                const photoResponse = await api.post<FileUploadResponse>('api/files/upload/pothole-image', formData);
+                photoUrl = photoResponse.data.url;
             }
 
-            // Create the Pothole DTO
+            // Step 4: Create the Pothole
             const pothole: PotholeCreateDto = {
+                reporterCitizenId: citizenId,
                 locationId: locationId,
                 categoryId: selectedCategory!,
                 statusId: PotholeStatus.REPORTED,
                 photoUrl: photoUrl,
                 dateReported: null
-            }
-            console.log(pothole);
+            };
+
             await api.post('/api/potholes/add', pothole);
 
             feedback.successMsg('Bache registrado correctamente.');
-
             handleClose();
+
         } catch (error: unknown) {
             const errorMessage = error instanceof AxiosError
                 ? `Error: ${error.response?.data.message}`
                 : 'Ha ocurrido un error registrando el bache. Intentalo de nuevo mas tarde.';
 
             feedback.errorMsg(errorMessage);
-            return;
         }
     };
 
@@ -260,11 +347,161 @@ export default function NewPotholeDialog({open, onClose, newReportId, sx}: NewPo
                     <FormControlLabel
                         control={<Checkbox />}
                         label="Es reporte de un ciudadano"
-                        checked={reportedByCitizen}
-                        onChange={() => setReportedByCitizen(!reportedByCitizen)}
+                        checked={reporterCitizen}
+                        onChange={() => setReporterCitizen(!reporterCitizen)}
                     />
                 </FormGroup>
 
+                { reporterCitizen && (
+                    <>
+                        {isAutoFilled && existingCitizenId && (
+                            <Box sx={{
+                                p: 2,
+                                mb: 2,
+                                backgroundColor: 'success.light',
+                                borderRadius: 1,
+                                border: '1px solid',
+                                borderColor: 'success.main'
+                            }}>
+                                <Typography variant="body2" color="success.dark">
+                                    <strong>Ciudadano encontrado:</strong> Los datos han sido autocompletados.
+                                    El reporte se vinculará al ciudadano existente (ID: {existingCitizenId}).
+                                </Typography>
+                            </Box>
+                        )}
+
+                        <Grid container spacing={2}>
+                            <Grid size={12}>
+                                <Typography variant={'caption'}>Obligatorio (*)</Typography>
+                            </Grid>
+                            <Grid size={6}>
+                                <TextField
+                                    label={"Número de teléfono"}
+                                    placeholder={'5551234567'}
+                                    value={citizenPhone?.toString() ?? ''}
+                                    onChange={(e) => handlePhoneChange(e.target.value)}
+                                    fullWidth
+                                    required
+                                    helperText={
+                                        citizenLookup.isLoading
+                                            ? 'Buscando ciudadano...'
+                                            : isAutoFilled
+                                                ? '✓ Ciudadano encontrado - datos autocompletados'
+                                                : citizenLookupPhone && !citizenLookup.data
+                                                    ? 'Ciudadano no registrado - se creará uno nuevo'
+                                                    : 'Ingresa el número para buscar ciudadano existente'
+                                    }
+                                    slotProps={{
+                                        formHelperText: {
+                                            sx: {
+                                                color: isAutoFilled
+                                                    ? 'success.main'
+                                                    : citizenLookupPhone && !citizenLookup.data
+                                                        ? 'info.main'
+                                                        : 'text.secondary'
+                                            }
+                                        }
+                                    }}
+                                />
+                            </Grid>
+
+                            <Grid size={6}>
+                                <TextField
+                                    label={"Correo electrónico"}
+                                    placeholder={'ejemplo@gmail.com'}
+                                    value={citizenEmail ?? ''}
+                                    onChange={(e) => setCitizenEmail(e.target.value === '' ? null : e.target.value)}
+                                    fullWidth
+                                    required
+                                />
+                            </Grid>
+
+                            <Grid size={6}>
+                                <TextField
+                                    label={"Primer nombre"}
+                                    placeholder={'Lorenzo'}
+                                    value={citizenName ?? ''}
+                                    onChange={(e) => {
+                                        setCitizenName(e.target.value === '' ? null : e.target.value);
+                                        if (isAutoFilled) setIsAutoFilled(false); // User is modifying auto-filled data
+                                    }}
+                                    fullWidth
+                                    required
+                                    disabled={isAutoFilled && existingCitizenId !== null}
+                                    slotProps={{
+                                        input: {
+                                            sx: isAutoFilled ? { backgroundColor: 'action.hover' } : {}
+                                        }
+                                    }}
+                                />
+                            </Grid>
+
+                            <Grid size={6}>
+                                <TextField
+                                    label={"Segundo nombre"}
+                                    placeholder={'Martin'}
+                                    value={citizenSecondName ?? ''}
+                                    onChange={(e) => {
+                                        setCitizenSecondName(e.target.value === '' ? null : e.target.value);
+                                        if (isAutoFilled) setIsAutoFilled(false);
+                                    }}
+                                    fullWidth
+                                    required
+                                    disabled={isAutoFilled && existingCitizenId !== null}
+                                    slotProps={{
+                                        input: {
+                                            sx: isAutoFilled ? { backgroundColor: 'action.hover' } : {}
+                                        }
+                                    }}
+                                />
+                            </Grid>
+
+                            <Grid size={6}>
+                                <TextField
+                                    label={"Apellido paterno"}
+                                    placeholder={'DiMarco'}
+                                    value={citizenLastName ?? ''}
+                                    onChange={(e) => {
+                                        setCitizenLastName(e.target.value === '' ? null : e.target.value);
+                                        if (isAutoFilled) setIsAutoFilled(false);
+                                    }}
+                                    fullWidth
+                                    required
+                                    disabled={isAutoFilled && existingCitizenId !== null}
+                                    slotProps={{
+                                        input: {
+                                            sx: isAutoFilled ? { backgroundColor: 'action.hover' } : {}
+                                        }
+                                    }}
+                                />
+                            </Grid>
+
+                            <Grid size={6}>
+                                <TextField
+                                    label={"Apellido paterno"}
+                                    placeholder={'DiMarco'}
+                                    value={citizenSecondLastName ?? ''}
+                                    onChange={(e) => {
+                                        setCitizenSecondLastName(e.target.value === '' ? null : e.target.value);
+                                        if (isAutoFilled) setIsAutoFilled(false);
+                                    }}
+                                    fullWidth
+                                    required
+                                    disabled={isAutoFilled && existingCitizenId !== null}
+                                    slotProps={{
+                                        input: {
+                                            sx: isAutoFilled ? { backgroundColor: 'action.hover' } : {}
+                                        }
+                                    }}
+                                />
+                            </Grid>
+
+                            <Grid size={12}>
+                                <Divider />
+                            </Grid>
+                        </Grid>
+                    </>
+                )}
 
                 {/* Main section, the geographic data one */}
                 <Grid size={12}>

@@ -1,22 +1,46 @@
 export interface PotholeResponseDto {
     potholeId: number;
-    reportByCitizenId: number | null;
+    reporterCitizen: {
+        firstName: string;
+        lastName: string;
+        email: string;
+        phoneNumber: bigint;
+    } | null;
     registeredByUser: {
         firstName: string;
         lastName: string;
         roleName: string;
     };
     location: {
-        stateName: string;
-        municipalityName: string;
-        localityName: string;
-        coloniaName: string;
+        locationId: bigint;
+        state: {
+            stateId: number;
+            stateName: string;
+        };
+        municipality: {
+            municipalityId: number;
+            municipalityName: string;
+        };
+        locality: {
+            localityId: number;
+            localityName: string;
+        };
         postalCode: number;
-        mainStreetName: string;
-        streetOneName: string;
-        streetTwoName: string;
+        mainStreet: {
+            streetId: number;
+            streetName: string;
+        };
+        streetOne: {
+            streetId: number;
+            streetName: string;
+        } | null;
+        streetTwo: {
+            streetId: number;
+            streetName: string;
+        } | null;
     };
     category: {
+        categoryId: number;
         categoryName: string;
         description: string;
         priorityLevel: number;

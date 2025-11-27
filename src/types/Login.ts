@@ -11,6 +11,7 @@ export interface LoginResponse {
     token: string;
     firstName: string;
     lastName: string;
+    admin: boolean;
 }
 
 /* Este es el objeto que vamos a guardar en memoria al hacer login, y el mismo al que vamos a poder acceder desde toda la app.
