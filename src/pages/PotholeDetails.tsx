@@ -1,17 +1,16 @@
 import {Box, Button, CardActionArea, Divider, Grid, Paper, Stack, Typography} from "@mui/material";
-import {useParams} from "react-router-dom";
+import {useNavigate, useParams} from "react-router-dom";
 import CustomCard from "../components/misc/CustomCard.tsx";
 import {useSinglePothole} from "../hooks/potholes/usePotholes.ts";
 import Loading from "../components/Loading.tsx";
-import {useNavigate} from "react-router-dom";
 import {PotholeResponseDto} from "../types/pothole/PotholeResponseDto.ts";
 import ImagePreviewer from "../components/potholes/ImagePreviewer.tsx";
 import {useState} from "react";
 import useAuth from "../hooks/auth/useAuth.ts";
 import {formatPhoneNumber} from "../utils/SimplePhoneNumberFormat.ts";
 import DeletePotholeDialog from "../components/potholes/DeletePotholeDialog.tsx";
-import {EditRounded, DeleteRounded} from "@mui/icons-material";
-import EditPotholeDialog from "../components/potholes/EditPotholeDialog.tsx";
+import {DeleteRounded, EditRounded} from "@mui/icons-material";
+import PotholeDialog from "../components/potholes/PotholeDialog.tsx";
 
 export default function PotholeDetails() {
     const {id} = useParams();
@@ -73,7 +72,8 @@ export default function PotholeDetails() {
 
 
             {user!.admin && pothole && (
-                <EditPotholeDialog
+                <PotholeDialog
+                    mode="edit"
                     open={editDialogOpen}
                     onClose={() => setEditDialogOpen(false)}
                     pothole={pothole}

@@ -3,7 +3,7 @@ import {usePotholes} from "../hooks/potholes/usePotholes.ts";
 import {DataGrid} from "@mui/x-data-grid";
 import {useNavigate} from "react-router-dom";
 import {useState} from "react";
-import NewPotholeDialog from "../components/potholes/NewPotholeDialog.tsx";
+import PotholeDialog from "../components/potholes/PotholeDialog.tsx";
 
 export default function Home() {
     const navigate = useNavigate();
@@ -82,10 +82,11 @@ export default function Home() {
                 onRowClick={(params) => navigate(`/secure/potholes/${params.row.potholeId}`)}
             />
 
-            <NewPotholeDialog
+            <PotholeDialog
+                mode="create"
                 open={createDialog}
                 onClose={() => setCreateDialog(false)}
-                newReportId={ (potholesData?.data?.at(-1)?.potholeId ?? 0) + 1 }
+                newReportId={(potholesData?.data?.at(-1)?.potholeId ?? 0) + 1}
             />
 
         </Box>

@@ -1,8 +1,11 @@
 export interface PotholeResponseDto {
     potholeId: number;
     reporterCitizen: {
+        citizenId: number;
         firstName: string;
+        middleName: string;
         lastName: string;
+        secondLastName: string;
         email: string;
         phoneNumber: bigint;
     } | null;
@@ -12,7 +15,7 @@ export interface PotholeResponseDto {
         roleName: string;
     };
     location: {
-        locationId: bigint;
+        locationId: bigint | number;
         state: {
             stateId: number;
             stateName: string;

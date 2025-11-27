@@ -20,7 +20,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { CloseRounded, CloudUpload } from '@mui/icons-material';
+import { CloseRounded, CloudUpload, Delete } from '@mui/icons-material';
 import useAuth from '../../hooks/auth/useAuth.ts';
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import VisuallyHiddenInput from '../misc/VisuallyHiddenInput.tsx';
@@ -31,6 +31,8 @@ import { useStreetsPerLocality } from '../../hooks/geography/streets/useStreets.
 import { useLocationsByZipCode, useZipCodeByLocation } from '../../hooks/geography/zipCodes/useZipCodeLookup.ts';
 import { api } from '../../utils/api.ts';
 import { PotholeCreateDto } from '../../types/pothole/PotholeCreateDto.ts';
+import { PotholeUpdateDto } from '../../types/pothole/PotholeUpdateDto.ts';
+import { PotholeResponseDto } from '../../types/pothole/PotholeResponseDto.ts';
 import { Location } from '../../types/geography/Location.ts';
 import { AxiosError } from 'axios';
 import { useFeedbackStore } from '../../hooks/feedback/feedbackStore.ts';
@@ -39,19 +41,36 @@ import { usePotholeCategories } from '../../hooks/potholes/usePotholeCategories.
 import { FileUploadResponse } from '../../types/FileUploadResponse.ts';
 import { useCitizenLookup } from '../../hooks/citizens/useCitizenLookup.ts';
 import { CitizenCreateDto } from '../../types/citizen/CitizenCreateDto.ts';
+import { UseMutationResult } from '@tanstack/react-query';
 
 // ============================================================================
 // Types & Interfaces
 // ============================================================================
 
+type DialogMode = 'create' | 'edit';
 type PostalCodeSource = 'manual' | 'location';
 
-interface NewPotholeDialogProps {
+interface BasePotholeDialogProps {
     open: boolean;
     onClose: () => void;
-    newReportId: number;
     sx?: SxProps;
 }
+
+interface CreateModeProps extends BasePotholeDialogProps {
+    mode: 'create';
+    newReportId: number;
+    pothole?: never;
+    updateMutation?: never;
+}
+
+interface EditModeProps extends BasePotholeDialogProps {
+    mode: 'edit';
+    pothole: PotholeResponseDto;
+    updateMutation: UseMutationResult<PotholeResponseDto, unknown, PotholeUpdateDto>;
+    newReportId?: never;
+}
+
+type PotholeDialogProps = CreateModeProps | EditModeProps;
 
 interface CitizenFormState {
     firstName: string;
@@ -74,6 +93,12 @@ interface LocationFormState {
 interface PostalCodeState {
     value: string;
     source: PostalCodeSource;
+}
+
+interface PhotoState {
+    file: File | null;
+    existingUrl: string | null;
+    markedForDeletion: boolean;
 }
 
 // ============================================================================
@@ -103,6 +128,12 @@ const INITIAL_POSTAL_CODE_STATE: PostalCodeState = {
     source: 'manual',
 };
 
+const INITIAL_PHOTO_STATE: PhotoState = {
+    file: null,
+    existingUrl: null,
+    markedForDeletion: false,
+};
+
 const MIN_PHONE_DIGITS = 10;
 const MIN_PHONE_LOOKUP_DIGITS = 7;
 const POSTAL_CODE_LENGTH = 5;
@@ -110,6 +141,23 @@ const POSTAL_CODE_LENGTH = 5;
 const DIALOG_PAPER_PROPS = {
     sx: { width: 800, maxWidth: 800 },
 };
+
+const DIALOG_CONFIG = {
+    create: {
+        title: 'Nuevo reporte de bache',
+        submitLabel: 'Reportar nuevo bache',
+        submittingLabel: 'Registrando...',
+        successMessage: 'Bache registrado correctamente.',
+        errorMessage: 'Ha ocurrido un error registrando el bache. Inténtalo de nuevo más tarde.',
+    },
+    edit: {
+        title: 'Editar reporte de bache',
+        submitLabel: 'Guardar cambios',
+        submittingLabel: 'Guardando...',
+        successMessage: 'Bache actualizado correctamente.',
+        errorMessage: 'No se pudo actualizar el bache. Inténtalo de nuevo.',
+    },
+} as const;
 
 // ============================================================================
 // Helper Functions
@@ -138,6 +186,53 @@ const getPhoneHelperColor = (
     if (isAutoFilled) return 'success.main';
     if (hasLookupPhone && !hasData) return 'info.main';
     return 'text.secondary';
+};
+
+const extractFilenameFromUrl = (url: string): string => {
+    try {
+        const parsed = new URL(url);
+        return parsed.pathname.split('/').pop() ?? '';
+    } catch {
+        return url.split('/').pop() ?? '';
+    }
+};
+
+const buildLocationFormFromPothole = (pothole: PotholeResponseDto): LocationFormState => ({
+    stateId: pothole.location?.state?.stateId ?? null,
+    municipalityId: pothole.location?.municipality?.municipalityId ?? null,
+    localityId: pothole.location?.locality?.localityId ?? null,
+    mainStreetId: pothole.location?.mainStreet?.streetId ?? null,
+    streetOneId: pothole.location?.streetOne?.streetId ?? null,
+    streetTwoId: pothole.location?.streetTwo?.streetId ?? null,
+});
+
+const buildCitizenFormFromPothole = (pothole: PotholeResponseDto): CitizenFormState => {
+    const citizen = pothole.reporterCitizen;
+    if (!citizen) return INITIAL_CITIZEN_STATE;
+
+    return {
+        firstName: citizen.firstName ?? '',
+        middleName: citizen.middleName ?? '',
+        lastName: citizen.lastName ?? '',
+        secondLastName: citizen.secondLastName ?? '',
+        phone: citizen.phoneNumber?.toString() ?? '',
+        email: citizen.email ?? '',
+    };
+};
+
+const hasLocationChanged = (
+    current: LocationFormState,
+    original: PotholeResponseDto
+): boolean => {
+    const origLoc = original.location;
+    return (
+        current.stateId !== origLoc?.state?.stateId ||
+        current.municipalityId !== origLoc?.municipality?.municipalityId ||
+        current.localityId !== origLoc?.locality?.localityId ||
+        current.mainStreetId !== (origLoc?.mainStreet?.streetId ?? null) ||
+        current.streetOneId !== (origLoc?.streetOne?.streetId ?? null) ||
+        current.streetTwoId !== (origLoc?.streetTwo?.streetId ?? null)
+    );
 };
 
 // ============================================================================
@@ -256,13 +351,167 @@ function FormSelect<T>({
     );
 }
 
+interface PhotoSectionProps {
+    mode: DialogMode;
+    photo: PhotoState;
+    onFileChange: (file: File | null) => void;
+    onMarkForDeletion: () => void;
+    previewUrl: string | null;
+}
+
+function PhotoSection({
+                          mode,
+                          photo,
+                          onFileChange,
+                          onMarkForDeletion,
+                          previewUrl,
+                      }: PhotoSectionProps) {
+    const displayUrl = previewUrl ?? (photo.markedForDeletion ? null : photo.existingUrl);
+    const hasExistingPhoto = photo.existingUrl && !photo.file && !photo.markedForDeletion;
+
+    const uploadButtonLabel = useMemo(() => {
+        if (mode === 'create') return 'Subir fotografía';
+        if (photo.file) return 'Reemplazar fotografía';
+        return 'Actualizar fotografía';
+    }, [mode, photo.file]);
+
+    const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+        onFileChange(e.target.files?.[0] ?? null);
+    };
+
+    return (
+        <>
+            <Grid size={12}>
+                <Typography variant="h6">Fotografía del bache</Typography>
+            </Grid>
+
+            <Grid
+                size={displayUrl ? 6 : 12}
+                sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                }}
+            >
+                <Button
+                    component="label"
+                    variant="contained"
+                    tabIndex={-1}
+                    startIcon={<CloudUpload />}
+                    color="secondary"
+                    fullWidth
+                >
+                    {uploadButtonLabel}
+                    <VisuallyHiddenInput
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileInputChange}
+                    />
+                </Button>
+
+                {mode === 'edit' && hasExistingPhoto && (
+                    <Button
+                        variant="text"
+                        color="error"
+                        startIcon={<Delete />}
+                        sx={{ mt: 1.5 }}
+                        onClick={onMarkForDeletion}
+                        fullWidth
+                    >
+                        Eliminar fotografía
+                    </Button>
+                )}
+
+                {photo.markedForDeletion && (
+                    <Typography variant="body2" color="error" sx={{ mt: 2, textAlign: 'center' }}>
+                        La imagen se eliminará al guardar los cambios.
+                    </Typography>
+                )}
+
+                {photo.file && (
+                    <Typography variant="subtitle1" textAlign="center" sx={{ pt: 2 }}>
+                        Nombre del archivo:
+                        <br />
+                        {photo.file.name}
+                    </Typography>
+                )}
+            </Grid>
+
+            {displayUrl && (
+                <Grid size={6}>
+                    <Box
+                        component="img"
+                        src={displayUrl}
+                        alt="Vista previa del bache"
+                        sx={{
+                            width: '100%',
+                            height: 220,
+                            objectFit: 'cover',
+                            borderRadius: 2,
+                        }}
+                    />
+                </Grid>
+            )}
+        </>
+    );
+}
+
+interface DialogHeaderProps {
+    mode: DialogMode;
+    newReportId?: number;
+    pothole?: PotholeResponseDto;
+    userName: string;
+    date: string;
+}
+
+function DialogHeader({ mode, newReportId, pothole, userName, date }: DialogHeaderProps) {
+    if (mode === 'create') {
+        return (
+            <>
+                <Typography variant="body1">
+                    <b>Número de folio:</b> {newReportId}
+                </Typography>
+                <Stack direction="row" justifyContent="space-between" sx={{ pb: 2 }}>
+                    <Typography variant="body1">
+                        <b>Registra:</b> {userName}
+                    </Typography>
+                    <Typography variant="body1">
+                        <b>Fecha:</b> {date}
+                    </Typography>
+                </Stack>
+            </>
+        );
+    }
+
+    return (
+        <>
+            <Typography variant="body1">
+                <b>Folio:</b> {pothole?.potholeId}
+            </Typography>
+            <Stack direction="row" justifyContent="space-between" sx={{ pb: 2 }}>
+                <Typography variant="body1">
+                    <b>Registrado por:</b>{' '}
+                    {`${pothole?.registeredByUser?.firstName ?? ''} ${pothole?.registeredByUser?.lastName ?? ''}`}
+                </Typography>
+                <Typography variant="body1">
+                    <b>Reportado el:</b>{' '}
+                    {pothole?.dateReported ? new Date(pothole.dateReported).toLocaleString() : '-'}
+                </Typography>
+            </Stack>
+        </>
+    );
+}
+
 // ============================================================================
 // Main Component
 // ============================================================================
 
-export default function NewPotholeDialog({ open, onClose, newReportId, sx }: NewPotholeDialogProps) {
+export default function PotholeDialog(props: PotholeDialogProps) {
+    const { open, onClose, sx, mode } = props;
     const { loginData: user } = useAuth();
     const feedback = useFeedbackStore();
+    const config = DIALOG_CONFIG[mode];
 
     // -------------------------------------------------------------------------
     // Form State
@@ -277,7 +526,7 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
     const [postalCode, setPostalCode] = useState<PostalCodeState>(INITIAL_POSTAL_CODE_STATE);
 
     const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [photo, setPhoto] = useState<PhotoState>(INITIAL_PHOTO_STATE);
     const [confirmation, setConfirmation] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -285,13 +534,16 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
     // Derived Values
     // -------------------------------------------------------------------------
     const today = useMemo(() => new Date().toLocaleString(), []);
-
-    const filePreviewUrl = useMemo(
-        () => (selectedFile ? URL.createObjectURL(selectedFile) : null),
-        [selectedFile]
+    const userName = useMemo(
+        () => `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim(),
+        [user]
     );
 
-    // Cleanup object URL on unmount or file change
+    const filePreviewUrl = useMemo(
+        () => (photo.file ? URL.createObjectURL(photo.file) : null),
+        [photo.file]
+    );
+
     useEffect(() => {
         return () => {
             if (filePreviewUrl) {
@@ -300,19 +552,25 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
         };
     }, [filePreviewUrl]);
 
-    const readyToSend = useMemo(
-        () =>
-            Boolean(
-                locationForm.stateId &&
-                locationForm.municipalityId &&
-                locationForm.localityId &&
-                locationForm.mainStreetId &&
-                selectedCategory &&
-                confirmation &&
-                !isSubmitting
-            ),
-        [locationForm, selectedCategory, confirmation, isSubmitting]
-    );
+    const isFormValid = useMemo(() => {
+        const baseValid = Boolean(
+            locationForm.stateId &&
+            locationForm.municipalityId &&
+            locationForm.localityId &&
+            locationForm.mainStreetId &&
+            selectedCategory &&
+            !isSubmitting
+        );
+
+        if (mode === 'create') {
+            return baseValid && confirmation;
+        }
+
+        return baseValid;
+    }, [locationForm, selectedCategory, confirmation, isSubmitting, mode]);
+
+    const isPending = mode === 'edit' ? props.updateMutation?.isPending : false;
+    const readyToSubmit = isFormValid && !isPending;
 
     // -------------------------------------------------------------------------
     // Data Fetching Hooks
@@ -325,7 +583,10 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
 
     const citizenLookup = useCitizenLookup({
         phoneNumber: citizenLookupPhone,
-        enabled: reporterCitizen && (citizenLookupPhone ?? 0) > Math.pow(10, MIN_PHONE_LOOKUP_DIGITS - 1),
+        enabled:
+            mode === 'create' &&
+            reporterCitizen &&
+            (citizenLookupPhone ?? 0) > Math.pow(10, MIN_PHONE_LOOKUP_DIGITS - 1),
     });
 
     const { data: reverseLookupData } = useZipCodeByLocation({
@@ -350,22 +611,47 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
     // Effects
     // -------------------------------------------------------------------------
 
-    // Set default state on load
+    // Initialize form for edit mode
     useEffect(() => {
-        if (!states.isLoading && locationForm.stateId === null && states.data?.length) {
-            setLocationForm((prev) => ({ ...prev, stateId: states.data[0].stateId }));
+        if (!open) return;
+
+        if (mode === 'edit' && props.pothole) {
+            const pothole = props.pothole;
+            setReporterCitizen(Boolean(pothole.reporterCitizen));
+            setCitizenForm(buildCitizenFormFromPothole(pothole));
+            setExistingCitizenId(pothole.reporterCitizen?.citizenId ?? null);
+            setLocationForm(buildLocationFormFromPothole(pothole));
+            setPostalCode({
+                value: pothole.location?.postalCode?.toString() ?? '',
+                source: 'location',
+            });
+            setSelectedCategory(pothole.category?.categoryId ?? null);
+            setPhoto({
+                file: null,
+                existingUrl: pothole.photoUrl ?? null,
+                markedForDeletion: false,
+            });
+            setIsAutoFilled(Boolean(pothole.reporterCitizen));
         }
-    }, [states.isLoading, states.data, locationForm.stateId]);
+    }, [open, mode, props.pothole]);
+
+    // Set default state on load (create mode)
+    useEffect(() => {
+        if (mode !== 'create') return;
+        if (!states.isLoading && locationForm.stateId === null && states.data?.length) {
+            setLocationForm((prev) => ({ ...prev, stateId: states.data![0].stateId }));
+        }
+    }, [states.isLoading, states.data, locationForm.stateId, mode]);
 
     // Reverse lookup: fill postal code from location
     useEffect(() => {
-        if (reverseLookupData?.postalCode) {
+        if (reverseLookupData?.postalCode && postalCode.source !== 'manual') {
             setPostalCode({
                 value: String(reverseLookupData.postalCode),
                 source: 'location',
             });
         }
-    }, [reverseLookupData]);
+    }, [reverseLookupData, postalCode.source]);
 
     // Forward lookup: fill location from postal code
     useEffect(() => {
@@ -383,25 +669,27 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
         setPostalCode((prev) => ({ ...prev, source: 'location' }));
     }, [locationsFromZip, postalCode.source]);
 
-    // Citizen lookup auto-fill
+    // Citizen lookup auto-fill (create mode only)
     useEffect(() => {
+        if (mode !== 'create') return;
+
         if (citizenLookup.data && !citizenLookup.isLoading) {
             const citizen = citizenLookup.data;
             setExistingCitizenId(citizen.citizenId);
-            setCitizenForm({
+            setCitizenForm((prev) => ({
+                ...prev,
                 firstName: citizen.firstName ?? '',
                 middleName: citizen.middleName ?? '',
                 lastName: citizen.lastName ?? '',
                 secondLastName: citizen.secondLastName ?? '',
-                phone: citizenForm.phone,
                 email: citizen.email ?? '',
-            });
+            }));
             setIsAutoFilled(true);
         } else if (citizenLookup.data === null && !citizenLookup.isLoading && citizenLookupPhone) {
             setExistingCitizenId(null);
             setIsAutoFilled(false);
         }
-    }, [citizenLookup.data, citizenLookup.isLoading, citizenLookupPhone, citizenForm.phone]);
+    }, [citizenLookup.data, citizenLookup.isLoading, citizenLookupPhone, mode]);
 
     // -------------------------------------------------------------------------
     // Handlers
@@ -417,63 +705,59 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
         [isAutoFilled]
     );
 
-    const handlePhoneChange = useCallback((value: string) => {
-        const digitsOnly = value.replace(/\D/g, '');
-        setCitizenForm((prev) => ({ ...prev, phone: digitsOnly }));
+    const handlePhoneChange = useCallback(
+        (value: string) => {
+            const digitsOnly = value.replace(/\D/g, '');
+            setCitizenForm((prev) => ({ ...prev, phone: digitsOnly }));
 
-        if (isAutoFilled) {
-            setIsAutoFilled(false);
-            setExistingCitizenId(null);
-        }
+            if (isAutoFilled) {
+                setIsAutoFilled(false);
+                setExistingCitizenId(null);
+            }
 
-        setCitizenLookupPhone(
-            digitsOnly.length >= MIN_PHONE_DIGITS ? Number(digitsOnly) : undefined
-        );
-    }, [isAutoFilled]);
-
-    const handleStateChange = useCallback(
-        (value: number | null) => {
-            setLocationForm({
-                stateId: value,
-                municipalityId: null,
-                localityId: null,
-                mainStreetId: null,
-                streetOneId: null,
-                streetTwoId: null,
-            });
-            setPostalCode(INITIAL_POSTAL_CODE_STATE);
+            if (mode === 'create') {
+                setCitizenLookupPhone(
+                    digitsOnly.length >= MIN_PHONE_DIGITS ? Number(digitsOnly) : undefined
+                );
+            }
         },
-        []
+        [isAutoFilled, mode]
     );
 
-    const handleMunicipalityChange = useCallback(
-        (value: number | null) => {
-            setLocationForm((prev) => ({
-                ...prev,
-                municipalityId: value,
-                localityId: null,
-                mainStreetId: null,
-                streetOneId: null,
-                streetTwoId: null,
-            }));
-            setPostalCode(INITIAL_POSTAL_CODE_STATE);
-        },
-        []
-    );
+    const handleStateChange = useCallback((value: number | null) => {
+        setLocationForm({
+            stateId: value,
+            municipalityId: null,
+            localityId: null,
+            mainStreetId: null,
+            streetOneId: null,
+            streetTwoId: null,
+        });
+        setPostalCode(INITIAL_POSTAL_CODE_STATE);
+    }, []);
 
-    const handleLocalityChange = useCallback(
-        (value: number | null) => {
-            setLocationForm((prev) => ({
-                ...prev,
-                localityId: value,
-                mainStreetId: null,
-                streetOneId: null,
-                streetTwoId: null,
-            }));
-            setPostalCode(INITIAL_POSTAL_CODE_STATE);
-        },
-        []
-    );
+    const handleMunicipalityChange = useCallback((value: number | null) => {
+        setLocationForm((prev) => ({
+            ...prev,
+            municipalityId: value,
+            localityId: null,
+            mainStreetId: null,
+            streetOneId: null,
+            streetTwoId: null,
+        }));
+        setPostalCode(INITIAL_POSTAL_CODE_STATE);
+    }, []);
+
+    const handleLocalityChange = useCallback((value: number | null) => {
+        setLocationForm((prev) => ({
+            ...prev,
+            localityId: value,
+            mainStreetId: null,
+            streetOneId: null,
+            streetTwoId: null,
+        }));
+        setPostalCode(INITIAL_POSTAL_CODE_STATE);
+    }, []);
 
     const handleStreetChange = useCallback(
         (field: 'mainStreetId' | 'streetOneId' | 'streetTwoId') => (value: number | null) => {
@@ -487,8 +771,20 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
         setPostalCode({ value: digitsOnly, source: 'manual' });
     }, []);
 
-    const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-        setSelectedFile(event.target.files?.[0] ?? null);
+    const handleFileChange = useCallback((file: File | null) => {
+        setPhoto((prev) => ({
+            ...prev,
+            file,
+            markedForDeletion: file ? false : prev.markedForDeletion,
+        }));
+    }, []);
+
+    const handleMarkPhotoForDeletion = useCallback(() => {
+        setPhoto((prev) => ({
+            ...prev,
+            markedForDeletion: true,
+            file: null,
+        }));
     }, []);
 
     const resetForm = useCallback(() => {
@@ -500,7 +796,7 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
         setLocationForm({ ...INITIAL_LOCATION_STATE, stateId: 1 });
         setPostalCode(INITIAL_POSTAL_CODE_STATE);
         setSelectedCategory(null);
-        setSelectedFile(null);
+        setPhoto(INITIAL_PHOTO_STATE);
         setConfirmation(false);
     }, []);
 
@@ -509,9 +805,28 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
         onClose();
     }, [resetForm, onClose]);
 
-    const handleSubmit = useCallback(async () => {
-        setIsSubmitting(true);
+    // -------------------------------------------------------------------------
+    // Submit Handlers
+    // -------------------------------------------------------------------------
 
+    const uploadPhoto = useCallback(async (file: File): Promise<string> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const { data } = await api.post<FileUploadResponse>(
+            '/api/files/upload/pothole-image',
+            formData
+        );
+        return data.url;
+    }, []);
+
+    const deletePhoto = useCallback(async (url: string): Promise<void> => {
+        const filename = extractFilenameFromUrl(url);
+        if (filename) {
+            await api.delete('/api/files/delete', { params: { filename } });
+        }
+    }, []);
+
+    const createLocation = useCallback(async (): Promise<number> => {
         const locationDto: Location = {
             stateId: locationForm.stateId!,
             municipalityId: locationForm.municipalityId!,
@@ -520,50 +835,43 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
             streetOneId: locationForm.streetOneId,
             streetTwoId: locationForm.streetTwoId,
         };
+        const { data } = await api.post<number>('/api/geography/locations/add', locationDto);
+        return data;
+    }, [locationForm]);
+
+    const createCitizen = useCallback(
+        async (locationId: number): Promise<number> => {
+            const citizenDto: CitizenCreateDto = {
+                firstName: citizenForm.firstName,
+                middleName: citizenForm.middleName || null,
+                lastName: citizenForm.lastName,
+                secondLastName: citizenForm.secondLastName || null,
+                email: citizenForm.email,
+                phoneNumber: citizenForm.phone ? Number(citizenForm.phone) : null,
+                registeredLocationId: locationId,
+            };
+            const { data } = await api.post<number>('/api/citizens/add', citizenDto);
+            return data;
+        },
+        [citizenForm]
+    );
+
+    const handleCreateSubmit = useCallback(async () => {
+        setIsSubmitting(true);
 
         try {
-            // Step 1: Create location
-            const { data: locationId } = await api.post<number>(
-                '/api/geography/locations/add',
-                locationDto
-            );
+            const locationId = await createLocation();
 
-            // Step 2: Handle citizen
             let citizenId: number | null = null;
             if (reporterCitizen) {
-                if (existingCitizenId) {
-                    citizenId = existingCitizenId;
-                } else {
-                    const citizenDto: CitizenCreateDto = {
-                        firstName: citizenForm.firstName,
-                        middleName: citizenForm.middleName || null,
-                        lastName: citizenForm.lastName,
-                        secondLastName: citizenForm.secondLastName || null,
-                        email: citizenForm.email,
-                        phoneNumber: citizenForm.phone ? Number(citizenForm.phone) : null,
-                        registeredLocationId: locationId,
-                    };
-                    const { data: newCitizenId } = await api.post<number>(
-                        '/api/citizens/add',
-                        citizenDto
-                    );
-                    citizenId = newCitizenId;
-                }
+                citizenId = existingCitizenId ?? (await createCitizen(locationId));
             }
 
-            // Step 3: Upload photo
             let photoUrl: string | null = null;
-            if (selectedFile) {
-                const formData = new FormData();
-                formData.append('file', selectedFile);
-                const { data: uploadResponse } = await api.post<FileUploadResponse>(
-                    '/api/files/upload/pothole-image',
-                    formData
-                );
-                photoUrl = uploadResponse.url;
+            if (photo.file) {
+                photoUrl = await uploadPhoto(photo.file);
             }
 
-            // Step 4: Create pothole
             const pothole: PotholeCreateDto = {
                 reporterCitizenId: citizenId,
                 locationId,
@@ -574,46 +882,108 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
             };
             await api.post('/api/potholes/add', pothole);
 
-            feedback.successMsg('Bache registrado correctamente.');
+            feedback.successMsg(config.successMessage);
             handleClose();
         } catch (error: unknown) {
             const errorMessage =
                 error instanceof AxiosError
                     ? `Error: ${error.response?.data?.message ?? error.message}`
-                    : 'Ha ocurrido un error registrando el bache. Inténtalo de nuevo más tarde.';
+                    : config.errorMessage;
             feedback.errorMsg(errorMessage);
         } finally {
             setIsSubmitting(false);
         }
     }, [
-        locationForm,
+        createLocation,
         reporterCitizen,
         existingCitizenId,
-        citizenForm,
-        selectedFile,
+        createCitizen,
+        photo.file,
+        uploadPhoto,
         selectedCategory,
         feedback,
+        config,
         handleClose,
     ]);
+
+    const handleEditSubmit = useCallback(async () => {
+        if (mode !== 'edit' || !props.pothole || !props.updateMutation) return;
+
+        setIsSubmitting(true);
+
+        try {
+            let locationId = props.pothole.location?.locationId;
+            let photoUrl = photo.existingUrl;
+
+            // Create new location if changed
+            if (hasLocationChanged(locationForm, props.pothole)) {
+                locationId = await createLocation();
+            }
+
+            // Handle photo changes
+            if (photo.markedForDeletion && photo.existingUrl) {
+                await deletePhoto(photo.existingUrl);
+                photoUrl = null;
+            } else if (photo.file) {
+                photoUrl = await uploadPhoto(photo.file);
+            }
+
+            const payload: PotholeUpdateDto = {
+                reportByCitizenId: existingCitizenId,
+                locationId,
+                categoryId: selectedCategory!,
+                photoUrl,
+            };
+
+            await props.updateMutation.mutateAsync(payload);
+
+            feedback.successMsg(config.successMessage);
+            handleClose();
+        } catch (error: unknown) {
+            const errorMessage =
+                error instanceof AxiosError
+                    ? error.response?.data?.message ?? config.errorMessage
+                    : config.errorMessage;
+            feedback.errorMsg(errorMessage);
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [
+        mode,
+        props,
+        photo,
+        locationForm,
+        createLocation,
+        deletePhoto,
+        uploadPhoto,
+        existingCitizenId,
+        selectedCategory,
+        feedback,
+        config,
+        handleClose,
+    ]);
+
+    const handleSubmit = mode === 'create' ? handleCreateSubmit : handleEditSubmit;
 
     // -------------------------------------------------------------------------
     // Render Helpers
     // -------------------------------------------------------------------------
 
     const citizenFieldsDisabled = isAutoFilled && existingCitizenId !== null;
+    const showCitizenLookupHelpers = mode === 'create';
 
-    const phoneHelperText = getPhoneHelperText(
-        citizenLookup.isLoading,
-        isAutoFilled,
-        citizenLookupPhone !== undefined,
-        !!citizenLookup.data
-    );
+    const phoneHelperText = showCitizenLookupHelpers
+        ? getPhoneHelperText(
+            citizenLookup.isLoading,
+            isAutoFilled,
+            citizenLookupPhone !== undefined,
+            !!citizenLookup.data
+        )
+        : undefined;
 
-    const phoneHelperColor = getPhoneHelperColor(
-        isAutoFilled,
-        citizenLookupPhone !== undefined,
-        !!citizenLookup.data
-    );
+    const phoneHelperColor = showCitizenLookupHelpers
+        ? getPhoneHelperColor(isAutoFilled, citizenLookupPhone !== undefined, !!citizenLookup.data)
+        : undefined;
 
     // -------------------------------------------------------------------------
     // Render
@@ -623,7 +993,7 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
         <Dialog open={open} onClose={handleClose} slotProps={{ paper: DIALOG_PAPER_PROPS }}>
             <DialogTitle>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Typography variant="h5">Nuevo reporte de bache</Typography>
+                    <Typography variant="h5">{config.title}</Typography>
                     <IconButton onClick={handleClose} aria-label="Cerrar diálogo">
                         <CloseRounded />
                     </IconButton>
@@ -631,18 +1001,13 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
             </DialogTitle>
 
             <DialogContent sx={sx}>
-                {/* Header Info */}
-                <Typography variant="body1">
-                    <b>Número de folio:</b> {newReportId}
-                </Typography>
-                <Stack direction="row" justifyContent="space-between" sx={{ pb: 2 }}>
-                    <Typography variant="body1">
-                        <b>Registra:</b> {`${user?.firstName} ${user?.lastName}`}
-                    </Typography>
-                    <Typography variant="body1">
-                        <b>Fecha:</b> {today}
-                    </Typography>
-                </Stack>
+                <DialogHeader
+                    mode={mode}
+                    newReportId={mode === 'create' ? props.newReportId : undefined}
+                    pothole={mode === 'edit' ? props.pothole : undefined}
+                    userName={userName}
+                    date={today}
+                />
 
                 {/* Citizen Report Checkbox */}
                 <FormGroup>
@@ -660,7 +1025,7 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
                 {/* Citizen Section */}
                 {reporterCitizen && (
                     <>
-                        {isAutoFilled && existingCitizenId && (
+                        {mode === 'create' && isAutoFilled && existingCitizenId && (
                             <CitizenFoundBanner citizenId={existingCitizenId} />
                         )}
 
@@ -678,9 +1043,11 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
                                     fullWidth
                                     required
                                     helperText={phoneHelperText}
-                                    slotProps={{
-                                        formHelperText: { sx: { color: phoneHelperColor } },
-                                    }}
+                                    slotProps={
+                                        phoneHelperColor
+                                            ? { formHelperText: { sx: { color: phoneHelperColor } } }
+                                            : undefined
+                                    }
                                 />
                             </Grid>
 
@@ -877,79 +1244,44 @@ export default function NewPotholeDialog({ open, onClose, newReportId, sx }: New
                     </Grid>
 
                     {/* Photo Section */}
-                    <Grid size={12}>
-                        <Typography variant="h6">Fotografía del bache</Typography>
-                    </Grid>
-
-                    <Grid
-                        size={selectedFile ? 6 : 12}
-                        sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                        }}
-                    >
-                        <Button
-                            component="label"
-                            variant="contained"
-                            tabIndex={-1}
-                            startIcon={<CloudUpload />}
-                            color="secondary"
-                            fullWidth
-                        >
-                            Subir fotografía
-                            <VisuallyHiddenInput
-                                type="file"
-                                accept="image/*"
-                                onChange={handleFileChange}
-                            />
-                        </Button>
-
-                        {selectedFile && (
-                            <Typography variant="subtitle1" textAlign="center" sx={{ pt: 2 }}>
-                                Nombre del archivo:
-                                <br />
-                                {selectedFile.name}
-                            </Typography>
-                        )}
-                    </Grid>
-
-                    {selectedFile && filePreviewUrl && (
-                        <Grid size={6}>
-                            <Box
-                                component="img"
-                                src={filePreviewUrl}
-                                alt="Vista previa del bache"
-                                width="100%"
-                            />
-                        </Grid>
-                    )}
+                    <PhotoSection
+                        mode={mode}
+                        photo={photo}
+                        onFileChange={handleFileChange}
+                        onMarkForDeletion={handleMarkPhotoForDeletion}
+                        previewUrl={filePreviewUrl}
+                    />
                 </Grid>
 
-                {/* Confirmation Section */}
-                <Divider sx={{ mt: 4 }} />
-                <FormGroup>
-                    <FormControlLabel
-                        control={
-                            <Checkbox
-                                checked={confirmation}
-                                onChange={(_, checked) => setConfirmation(checked)}
+                {/* Confirmation Section (Create mode only) */}
+                {mode === 'create' && (
+                    <>
+                        <Divider sx={{ mt: 4 }} />
+                        <FormGroup>
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        checked={confirmation}
+                                        onChange={(_, checked) => setConfirmation(checked)}
+                                    />
+                                }
+                                label="Declaro que la información proporcionada es veraz y completa."
                             />
-                        }
-                        label="Declaro que la información proporcionada es veraz y completa."
-                    />
-                </FormGroup>
+                        </FormGroup>
+                    </>
+                )}
+
+                {mode === 'edit' && <Divider sx={{ mt: 4 }} />}
 
                 <Button
                     variant="contained"
                     sx={{ mt: 2 }}
-                    disabled={!readyToSend}
+                    disabled={!readyToSubmit}
                     onClick={handleSubmit}
                     fullWidth
                 >
                     <Typography variant="h6">
-                        {isSubmitting ? 'Registrando...' : 'Reportar nuevo bache'}
+                        {isSubmitting || isPending ? config.submittingLabel : config.submitLabel}
                     </Typography>
                 </Button>
             </DialogContent>
